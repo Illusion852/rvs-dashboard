@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>R.V.S. Academy Dashboard</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+      padding: 20px;
+      color: #333;
+    }
+    .hidden { display: none; }
+    .card, .button {
+      padding: 10px 20px;
+      margin: 10px;
+      border-radius: 10px;
+      background: #fff;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+      cursor: pointer;
+      transition: transform 0.2s;
+      border: none;
+    }
+    .card:hover, .button:hover {
+      transform: scale(1.05);
+    }
+    .dashboard, .students, .dm-panel {
+      margin-top: 20px;
+    }
+    .student-entry {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px;
+      background: rgba(255, 255, 255, 0.8);
+      border-radius: 8px;
+      margin: 5px 0;
+    }
+    .online { color: green; font-weight: bold; }
+    .offline { color: red; font-weight: bold; }
+    textarea {
+      width: 100%;
+      height: 100px;
+      padding: 10px;
+      margin-top: 10px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      box-sizing: border-box;
+    }
+    input, select {
+      margin: 5px 0;
+      padding: 10px;
+      width: 100%;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      box-sizing: border-box;
+    }
+    .avatar-preview {
+      width: 50px;
+      height: 50px;
+      object-fit: cover;
+      border-radius: 50%;
+      margin-right: 10px;
+    }
+    .student-entry button {
+      margin: 0 0 0 10px;
+      padding: 5px 10px;
+      font-size: 12px;
+      width: auto;
+    }
+    #dmHistory {
+      max-height: 200px;
+      overflow-y: auto;
+      background: #f9f9f9;
+      padding: 10px;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      border: 1px solid #ddd;
+    }
+    .typing-indicator {
+      font-style: italic;
+      color: #666;
+      margin-top: 5px;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div id="authSection">
+    <h2>Welcome to R.V.S. Academy</h2>
+    <button class="button" onclick="setAuthType('login')">Login</button>
+    <button class="button" onclick="setAuthType('signup')">Sign Up</button>
+  </div>
+
+  <div id="loginSignupForm" class="hidden">
+    <h3 id="formTitle"></h3>
+    <input type="text" id="username" placeholder="Enter Name" required><br>
+    <input type="password" id="userpass" placeholder="Enter Password" required>
+    <input type="checkbox" id="showPass" onchange="togglePasswordVisibility()"> Show Password<br>
+    <input type="password" id="confirmPass" class="hidden" placeholder="Confirm Password"><br>
+    <input type="text" id="userclass" placeholder="Enter Class (e.g. 9 A)" required><br>
+    <label><input type="checkbox" id="rememberMe"> Remember Me</label><br>
+    <select id="avatarGender">
+      <option value="">Select Gender</option>
+      <option value="male">Male</option>
+      <option value="female">Female</option>
+    </select><br>
+    <button class="button" onclick="handleAuth()">Submit</button>
+    <button class="button" onclick="goBackToWelcome()">Back to Welcome</button>
+  </div>
+
+  <div id="classDashboard" class="dashboard hidden">
+    <h3>Select Your Class</h3>
+    <button class="button" onclick="showOnlineUsers()">Show Online Members</button>
+    <button class="button" onclick="startAnonymousChat()">Anonymous Chat</button>
+    <button class="button" onclick="openGroupPanel()">Create/View Groups</button>
+    <div id="classList"></div>
+  </div>
+
+  <div id="studentsPanel" class="students hidden">
+    <h3 id="selectedClass"></h3>
+    <div id="studentsList"></div>
+    <button class="button" onclick="backToClasses()">Back</button>
+  </div>
+
+  <div id="dmPanel" class="dm-panel hidden" style="width: 80%; max-width: 600px; margin: auto;">
+    <h4 id="dmTitle"></h4>
+    <div id="dmHistory"></div>
+    <textarea id="dmText" placeholder="Type a message... 😊👍🎉"></textarea>
+    <select id="emojiPicker" onchange="addEmoji(this.value)">
+      <option value="">😊 Emoji</option>
+      <option value="😀">😀</option>
+      <option value="😂">😂</option>
+      <option value="😍">😍</option>
+      <option value="😎">😎</option>
+      <option value="👍">👍</option>
+      <option value="🎉">🎉</option>
+    </select>
+    <button class="button" onclick="sendDM()">Send</button>
+    <button class="button" onclick="closeDM()">Close</button>
+  </div>
+
+  <div id="anonymousChatPanel" class="dm-panel hidden">
+    <h4>Anonymous Chat</h4>
+    <textarea id="anonText" placeholder="Type your anonymous message..."></textarea>
+    <button class="button" onclick="sendAnonMessage()">Send</button>
+    <button class="button" onclick="closeAnonChat()">Close</button>
+    <div id="anonMessages" style="margin-top: 10px;"></div>
+  </div>
+
+  <div id="groupPanel" class="dm-panel hidden">
+    <h4>Groups</h4>
+    <input type="text" id="groupName" placeholder="Enter group name">
+    <button class="button" onclick="createGroup()">Create Group</button>
+    <div id="groupList" style="margin-top: 10px;"></div>
+    <button class="button" onclick="closeGroupPanel()">Close</button>
+  </div>
+
+  <script>
+    let authType = '';
+    let currentUser = null;
+    let currentClass = '';
+    let dmTarget = '';
+    let hideTypingTimeout = null;
+
+    // Use in-memory storage instead of localStorage for Claude.ai compatibility
+    const users = {};
+    const onlineUsers = {};
+    const groups = [];
+    const dmHistories = {};
+    const typingStatus = {};
+
+    const classColors = {
+      '9 A': '#add8e6', '9 B': '#add8e6', '9 C': '#add8e6', '9 D': '#add8e6', '9 E': '#add8e6',
+      '10 A': '#90ee90', '10 B': '#90ee90', '10 C': '#90ee90', '10 D': '#90ee90',
+      '11 A': '#f08080', '11 B': '#f08080',
+      '12 A': '#dda0dd', '12 B': '#dda0dd'
+    };
+
+    const defaultAvatars = {
+      male: 'https://cdn-icons-png.flaticon.com/512/147/147144.png',
+      female: 'https://cdn-icons-png.flaticon.com/512/236/236832.png'
+    };
+
+    function setAuthType(type) {
+      authType = type;
+      document.getElementById('authSection').classList.add('hidden');
+      document.getElementById('loginSignupForm').classList.remove('hidden');
+      document.getElementById('formTitle').innerText = type === 'login' ? 'Login' : 'Sign Up';
+      document.getElementById('confirmPass').classList.toggle('hidden', type === 'login');
+    }
+
+    function goBackToWelcome() {
+      document.getElementById('loginSignupForm').classList.add('hidden');
+      document.getElementById('authSection').classList.remove('hidden');
+    }
+
+    function handleAuth() {
+      let name = document.getElementById('username').value.trim();
+      name = name.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+      const pass = document.getElementById('userpass').value.trim();
+      const confirm = document.getElementById('confirmPass').value.trim();
+      const classSec = document.getElementById('userclass').value.trim().toUpperCase();
+      const gender = document.getElementById('avatarGender').value;
+      const avatar = gender ? defaultAvatars[gender] : '';
+
+      if (!name || !pass || !classSec) {
+        alert('Please fill in all required fields.');
+        return;
+      }
+
+      if (!users[classSec]) users[classSec] = [];
+
+      if (authType === 'signup') {
+        // Check if user already exists in ANY class
+        const existingNames = Object.values(users).flat().map(u => u.name.toLowerCase());
+        if (existingNames.includes(name.toLowerCase())) {
+          alert('User already exists in some class.');
+          return;
+        }
+        if (pass !== confirm) {
+          alert('Passwords do not match.');
+          return;
+        }
+        users[classSec].push({ name, pass, avatar });
+        alert('Account created successfully! You can now login.');
+      } else {
+        // Login: Find user in the specified class
+        const user = users[classSec].find(u => u.name.toLowerCase() === name.toLowerCase());
+        if (!user) {
+          alert(`User "${name}" not found in class "${classSec}". Please check your name and class.`);
+          return;
+        }
+        if (user.pass !== pass) {
+          alert('Incorrect password. Please try again.');
+          return;
+        }
+      }
+
+      currentUser = name;
+      onlineUsers[name] = true;
+      openDashboard();
+    }
+
+    function openDashboard() {
+      document.getElementById('loginSignupForm').classList.add('hidden');
+      document.getElementById('classDashboard').classList.remove('hidden');
+      const container = document.getElementById('classList');
+      container.innerHTML = '';
+
+      const fixedClasses = [
+        '9 A', '9 B', '9 C', '9 D', '9 E',
+        '10 A', '10 B', '10 C', '10 D',
+        '11 A', '11 B',
+        '12 A', '12 B'
+      ];
+
+      fixedClasses.forEach(cls => {
+        if (!users[cls]) users[cls] = [];
+        const div = document.createElement('div');
+        div.className = 'card';
+        div.style.backgroundColor = classColors[cls] || '#fff';
+        div.textContent = cls;
+        div.onclick = () => showStudents(cls);
+        container.appendChild(div);
+      });
+    }
+
+    function showStudents(cls) {
+      currentClass = cls;
+      document.getElementById('classDashboard').classList.add('hidden');
+      document.getElementById('studentsPanel').classList.remove('hidden');
+      document.getElementById('selectedClass').innerText = `Class ${cls}`;
+      const list = document.getElementById('studentsList');
+      list.innerHTML = '';
+      
+      if (users[cls] && users[cls].length > 0) {
+        users[cls].forEach(s => {
+          const row = document.createElement('div');
+          row.className = 'student-entry';
+          const status = onlineUsers[s.name] ? 'online' : 'offline';
+          const avatar = s.avatar ? `<img src="${s.avatar}" class="avatar-preview">` : '';
+          row.innerHTML = `${avatar}<span>${s.name}</span><span class="${status}">${status}</span><button onclick="openDM('${s.name}')">Message</button>`;
+          list.appendChild(row);
+        });
+      } else {
+        const row = document.createElement('div');
+        row.className = 'student-entry';
+        row.innerHTML = '<span>No students in this class yet.</span>';
+        list.appendChild(row);
+      }
+    }
+
+    function backToClasses() {
+      document.getElementById('studentsPanel').classList.add('hidden');
+      document.getElementById('classDashboard').classList.remove('hidden');
+    }
+
+    function openDM(name) {
+      dmTarget = name;
+      document.getElementById('dmPanel').classList.remove('hidden');
+      document.getElementById('dmTitle').innerText = `Chat with ${name}`;
+      updateDMHistory();
+    }
+
+    function closeDM() {
+      document.getElementById('dmPanel').classList.add('hidden');
+      document.getElementById('dmText').value = '';
+      document.getElementById('dmHistory').innerHTML = '';
+      clearTypingIndicator();
+    }
+
+    function sendDM() {
+      const msg = document.getElementById('dmText').value.trim();
+      if (!msg) return;
+      
+      const historyKey = `${currentUser}_${dmTarget}`;
+      if (!dmHistories[historyKey]) dmHistories[historyKey] = [];
+      
+      dmHistories[historyKey].push({ 
+        from: currentUser, 
+        to: dmTarget, 
+        msg, 
+        timestamp: new Date().toLocaleTimeString(),
+        read: false 
+      });
+      
+      updateDMHistory();
+      document.getElementById('dmText').value = '';
+      clearTypingIndicator();
+      
+      alert(`Message sent to ${dmTarget}: ${msg}`);
+    }
+
+    function updateDMHistory() {
+      const historyKey = `${currentUser}_${dmTarget}`;
+      const reverseKey = `${dmTarget}_${currentUser}`;
+      
+      const messages = [];
+      if (dmHistories[historyKey]) messages.push(...dmHistories[historyKey]);
+      if (dmHistories[reverseKey]) messages.push(...dmHistories[reverseKey]);
+      
+      // Sort by timestamp (simple approach)
+      messages.sort((a, b) => new Date('1970/01/01 ' + a.timestamp) - new Date('1970/01/01 ' + b.timestamp));
+      
+      const historyBox = document.getElementById('dmHistory');
+      historyBox.innerHTML = '';
+      
+      messages.forEach(m => {
+        const line = document.createElement('div');
+        line.style.margin = '5px 0';
+        line.innerHTML = `<strong>${m.from}:</strong> ${m.msg} <small>(${m.timestamp})</small>`;
+        historyBox.appendChild(line);
+      });
+      
+      historyBox.scrollTop = historyBox.scrollHeight;
+    }
+
+    function togglePasswordVisibility() {
+      const show = document.getElementById('showPass').checked;
+      document.getElementById('userpass').type = show ? 'text' : 'password';
+      document.getElementById('confirmPass').type = show ? 'text' : 'password';
+    }
+
+    function showOnlineUsers() {
+      document.getElementById('classDashboard').classList.add('hidden');
+      document.getElementById('studentsPanel').classList.remove('hidden');
+      document.getElementById('selectedClass').innerText = 'Online Members';
+      const list = document.getElementById('studentsList');
+      list.innerHTML = '';
+      
+      let hasOnlineUsers = false;
+      Object.keys(users).forEach(cls => {
+        if (users[cls]) {
+          users[cls].forEach(s => {
+            if (onlineUsers[s.name]) {
+              hasOnlineUsers = true;
+              const row = document.createElement('div');
+              row.className = 'student-entry';
+              const avatar = s.avatar ? `<img src="${s.avatar}" class="avatar-preview">` : '';
+              row.innerHTML = `${avatar}<span>${s.name} (${cls})</span><span class="online">online</span><button onclick="openDM('${s.name}')">Message</button>`;
+              list.appendChild(row);
+            }
+          });
+        }
+      });
+      
+      if (!hasOnlineUsers) {
+        const row = document.createElement('div');
+        row.className = 'student-entry';
+        row.innerHTML = '<span>No other users online.</span>';
+        list.appendChild(row);
+      }
+    }
+
+    function startAnonymousChat() {
+      document.getElementById('classDashboard').classList.add('hidden');
+      document.getElementById('anonymousChatPanel').classList.remove('hidden');
+    }
+
+    function closeAnonChat() {
+      document.getElementById('anonymousChatPanel').classList.add('hidden');
+      document.getElementById('anonText').value = '';
+      document.getElementById('anonMessages').innerHTML = '';
+      document.getElementById('classDashboard').classList.remove('hidden');
+    }
+
+    function sendAnonMessage() {
+      const msg = document.getElementById('anonText').value.trim();
+      if (!msg) return;
+      
+      const div = document.createElement('div');
+      div.className = 'student-entry';
+      div.innerHTML = `<span><strong>Anonymous:</strong> ${msg}</span>`;
+      document.getElementById('anonMessages').appendChild(div);
+      document.getElementById('anonText').value = '';
+    }
+
+    function openGroupPanel() {
+      document.getElementById('classDashboard').classList.add('hidden');
+      document.getElementById('groupPanel').classList.remove('hidden');
+      renderGroupList();
+    }
+
+    function closeGroupPanel() {
+      document.getElementById('groupPanel').classList.add('hidden');
+      document.getElementById('classDashboard').classList.remove('hidden');
+    }
+
+    function createGroup() {
+      const name = document.getElementById('groupName').value.trim();
+      if (!name) {
+        alert('Enter a group name');
+        return;
+      }
+      if (groups.includes(name)) {
+        alert('Group already exists');
+        return;
+      }
+      groups.push(name);
+      document.getElementById('groupName').value = '';
+      renderGroupList();
+    }
+
+    function renderGroupList() {
+      const container = document.getElementById('groupList');
+      container.innerHTML = '';
+      
+      if (groups.length === 0) {
+        const div = document.createElement('div');
+        div.className = 'card';
+        div.style.backgroundColor = '#f0f0f0';
+        div.innerText = 'No groups created yet.';
+        container.appendChild(div);
+      } else {
+        groups.forEach(g => {
+          const div = document.createElement('div');
+          div.className = 'card';
+          div.innerText = g;
+          container.appendChild(div);
+        });
+      }
+    }
+
+    function addEmoji(emoji) {
+      if (!emoji) return;
+      const input = document.getElementById('dmText');
+      input.value += emoji;
+      document.getElementById('emojiPicker').value = '';
+      input.focus();
+    }
+
+    function clearTypingIndicator() {
+      const indicator = document.getElementById('typingIndicator');
+      if (indicator) indicator.remove();
+      if (hideTypingTimeout) {
+        clearTimeout(hideTypingTimeout);
+        hideTypingTimeout = null;
+      }
+    }
+
+ 
+  </script>
+</body>
+</html>
